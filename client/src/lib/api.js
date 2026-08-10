@@ -48,6 +48,7 @@ export const jarvisApi = {
       method: 'POST',
       body: JSON.stringify({ message, conversationId, audioMode })
     }),
+  capabilities: () => apiFetch('/api/ai/capabilities'),
   getMemories: () => apiFetch('/api/ai/memories'),
   deleteMemory: (id) => apiFetch(`/api/ai/memories/${id}`, { method: 'DELETE' }),
   clearMemories: () => apiFetch('/api/ai/memories', { method: 'DELETE' }),

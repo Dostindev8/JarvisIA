@@ -42,6 +42,8 @@ export default function JarvisAI() {
     toggleChat
   } = useJarvisStore();
 
+  const sendMessageRef = useRef(null);
+
   const {
     isSupported: sttSupported,
     isListening,
@@ -51,17 +53,17 @@ export default function JarvisAI() {
     startListening,
     stopListening,
     resetTranscript
-  } = useSpeechRecognition();
+  } = useSpeechRecognition({ onFinal: (text) => sendMessageRef.current?.(text) });
 
   const { isSpeaking, amplitude: ttsAmplitude, speak, stop: stopTts } = useTextToSpeech();
 
   const handleSpeak = useCallback(
-    async (text, audioUrl) => {
-      if (spokeRef.current) return;
+    async (text) => {
+      if (!text || spokeRef.current) return;
       spokeRef.current = true;
       setJarvisState('speaking');
       const voiceId = localStorage.getItem('jarvis_voice_id') || undefined;
-      await speak(audioUrl || text, voiceId);
+      await speak(text, voiceId);
       setJarvisState('idle');
       spokeRef.current = false;
     },
@@ -72,7 +74,7 @@ export default function JarvisAI() {
     async (data) => {
       if (!data?.text) return;
       setJarvisReply(data.text);
-      await handleSpeak(data.text, data.audioUrl);
+      if (data.speak !== false) await handleSpeak(data.text);
     },
     [handleSpeak]
   );
@@ -103,13 +105,15 @@ export default function JarvisAI() {
       resetTranscript();
 
       try {
-        const res = await jarvisApi.chat(message, conversationId, false);
+        // audioMode=true → servidor intenta ElevenLabs si hay key; el front siempre habla la respuesta
+        const res = await jarvisApi.chat(message, conversationId, true);
         const { reply, conversationId: convId, toolsUsed } = res.data;
 
         if (convId) setConversationId(convId);
         setJarvisReply(reply);
         addMessage({ role: 'assistant', content: reply, toolsUsed });
 
+        // Si el socket ya habló la respuesta, spokeRef evita doble reproducción
         if (!isConnected) {
           await handleSpeak(reply);
         }
@@ -125,10 +129,11 @@ export default function JarvisAI() {
 
   const handleVoiceToggle = () => {
     if (isListening) {
+      // Solo detiene: onFinal del hook envía el texto una sola vez (sin doble envío)
       stopListening();
-      const finalText = transcript || interimTranscript;
-      if (finalText.trim()) sendMessage(finalText);
+      setJarvisState('idle');
     } else {
+      stopTts();
       resetTranscript();
       startListening();
       setJarvisState('listening');
@@ -136,6 +141,27 @@ export default function JarvisAI() {
   };
 
   useEffect(() => () => stopTts(), [stopTts]);
+
+  // Auto-configura voz: si el servidor tiene ElevenLabs, deja motor en auto + voice ID por defecto
+  useEffect(() => {
+    jarvisApi
+      .capabilities()
+      .then((r) => {
+        const data = r.data || {};
+        if (data.elevenLabs) {
+          if (localStorage.getItem('jarvis_use_elevenlabs') === null) {
+            localStorage.setItem('jarvis_use_elevenlabs', 'auto');
+          }
+          if (!localStorage.getItem('jarvis_voice_id') && data.defaultVoiceId) {
+            localStorage.setItem('jarvis_voice_id', data.defaultVoiceId);
+          }
+        }
+        if (!data.anthropic) {
+          useJarvisStore.getState().setDegradedMode?.(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -145,7 +171,7 @@ export default function JarvisAI() {
             <LCSLogo size={36} className="rounded-full" />
             <div>
               <p className="font-jarvis font-semibold text-sm leading-none text-gold-gradient tracking-wider">JARVISIA</p>
-              <p className="text-[11px] text-muted mt-0.5">Inteligencia que trabaja para ti</p>
+              <p className="text-[10px] text-muted mt-0.5 tracking-wide uppercase">Inteligencia artificial que trabaja para ti</p>
             </div>
           </div>
 
@@ -211,11 +237,17 @@ export default function JarvisAI() {
         >
           <input
             type="text"
-            value={input}
+            value={isListening ? (interimTranscript || transcript || input) : input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Escribe tu mensaje..."
+            placeholder={
+              isListening
+                ? 'Escuchando… habla ahora'
+                : !sttSupported
+                  ? 'Escribe tu mensaje (micrófono no soportado en este navegador)…'
+                  : 'Escribe o pulsa el micrófono…'
+            }
             className="flex-1 bg-transparent border-none outline-none text-sm px-3 min-h-[44px] placeholder:text-zinc-500"
-            disabled={sending}
+            disabled={sending || isListening}
             aria-label="Mensaje"
           />
           <JarvisVoiceButton isListening={isListening} onToggle={handleVoiceToggle} disabled={!sttSupported || sending} />

@@ -6,7 +6,8 @@ async function textToSpeech(text, voiceId) {
     throw new Error('ElevenLabs no configurado');
   }
 
-  const vid = voiceId || process.env.ELEVENLABS_VOICE_ID;
+  // Adam (masculino claro) — multilingual_v2 habla español bien si no hay voice ID propio
+  const vid = voiceId || process.env.ELEVENLABS_VOICE_ID || 'pNInz6obpgDQGcFmaJgB';
   if (!vid) {
     throw new Error('ELEVENLABS_VOICE_ID no configurado');
   }

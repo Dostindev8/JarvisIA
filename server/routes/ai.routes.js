@@ -44,6 +44,19 @@ function createLimiter(max, windowMs = 60 * 1000) {
 const chatLimiter = createLimiter(30);
 const ttsLimiter = createLimiter(20);
 
+/** Capacidades activas — el front auto-habilita ElevenLabs / detecta modo básico */
+router.get('/capabilities', requireAuth, (_req, res) => {
+  res.json({
+    success: true,
+    data: {
+      anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
+      elevenLabs: Boolean(process.env.ELEVENLABS_API_KEY),
+      whisper: Boolean(process.env.OPENAI_API_KEY),
+      defaultVoiceId: process.env.ELEVENLABS_VOICE_ID || 'pNInz6obpgDQGcFmaJgB'
+    }
+  });
+});
+
 async function getOrCreateConversation(userId, conversationId) {
   if (conversationId) {
     const existing = await JarvisConversation.findOne({ _id: conversationId, userId });
@@ -89,24 +102,21 @@ router.post('/chat', requireAuth, chatLimiter, async (req, res) => {
     });
     await conversation.save();
 
-    let audioUrl = null;
-    if (audioMode && process.env.ELEVENLABS_API_KEY) {
-      try {
-        audioUrl = `/api/ai/tts/stream?text=${encodeURIComponent(result.text.slice(0, 500))}`;
-      } catch {
-        // Frontend usará speechSynthesis como fallback
-      }
-    }
-
+    // TTS: el front llama POST /api/ai/tts (ElevenLabs) o speechSynthesis.
+    // No inventamos URLs GET /tts/stream inexistentes.
     emitJarvisState?.(userId.toString(), { state: 'speaking' });
-    emitJarvisResponse?.(userId.toString(), { text: result.text, audioUrl, toolsUsed: result.toolsUsed });
+    emitJarvisResponse?.(userId.toString(), {
+      text: result.text,
+      speak: Boolean(audioMode),
+      toolsUsed: result.toolsUsed
+    });
 
     res.json({
       success: true,
       data: {
         reply: result.text,
         conversationId: conversation._id,
-        audioUrl,
+        speak: Boolean(audioMode),
         toolsUsed: result.toolsUsed,
         degraded: result.degraded || false
       }

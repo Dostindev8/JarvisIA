@@ -11,9 +11,13 @@ export default function JarvisSettingsModal({ isOpen, onClose, socketConnected, 
   const [voiceId, setVoiceId] = useState(localStorage.getItem('jarvis_voice_id') || '');
   const [browserVoice, setBrowserVoice] = useState(localStorage.getItem('jarvis_browser_voice') || '');
   const [ttsRate, setTtsRate] = useState(Number(localStorage.getItem('jarvis_tts_rate') || '0.95'));
-  const [ttsPitch, setTtsPitch] = useState(Number(localStorage.getItem('jarvis_tts_pitch') || '0.88'));
-  const [useElevenLabs, setUseElevenLabs] = useState(localStorage.getItem('jarvis_use_elevenlabs') === 'true');
+  const [ttsPitch, setTtsPitch] = useState(Number(localStorage.getItem('jarvis_tts_pitch') || '0.95'));
+  const [useElevenLabs, setUseElevenLabs] = useState(() => {
+    const v = localStorage.getItem('jarvis_use_elevenlabs');
+    return v === null || v === '' ? 'auto' : v;
+  });
   const [voices, setVoices] = useState([]);
+  const [caps, setCaps] = useState({ anthropic: false, elevenLabs: false });
   const [library, setLibrary] = useState([]);
   const { currentMemories, setMemories } = useJarvisStore();
   const [loading, setLoading] = useState(false);
@@ -24,6 +28,12 @@ export default function JarvisSettingsModal({ isOpen, onClose, socketConnected, 
     setVoices(getAvailableVoices());
     jarvisApi.getMemories().then((r) => setMemories(r.data || [])).catch(() => {});
     musicApi.library().then((r) => setLibrary(r.data || [])).catch(() => {});
+    jarvisApi.capabilities().then((r) => {
+      setCaps(r.data || {});
+      if (r.data?.elevenLabs && !localStorage.getItem('jarvis_voice_id') && r.data.defaultVoiceId) {
+        setVoiceId(r.data.defaultVoiceId);
+      }
+    }).catch(() => {});
   }, [isOpen, setMemories]);
 
   const saveVoiceSettings = () => {
@@ -31,7 +41,7 @@ export default function JarvisSettingsModal({ isOpen, onClose, socketConnected, 
     localStorage.setItem('jarvis_browser_voice', browserVoice);
     localStorage.setItem('jarvis_tts_rate', String(ttsRate));
     localStorage.setItem('jarvis_tts_pitch', String(ttsPitch));
-    localStorage.setItem('jarvis_use_elevenlabs', useElevenLabs ? 'true' : 'false');
+    localStorage.setItem('jarvis_use_elevenlabs', useElevenLabs);
   };
 
   const deleteMemory = async (id) => {
@@ -87,17 +97,30 @@ export default function JarvisSettingsModal({ isOpen, onClose, socketConnected, 
           {tab === 'Voz' && (
             <>
               <p className="text-xs text-muted">
-                Por defecto usa la voz del navegador (gratis). Activa ElevenLabs cuando tengas la API key.
+                Modo <strong className="text-white/80">Auto</strong>: intenta ElevenLabs (voz premium) y si no hay key usa la mejor voz masculina española del navegador.
               </p>
+              {!caps.elevenLabs && (
+                <p className="text-xs text-amber-400/90 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
+                  ElevenLabs no configurado en el servidor. Añade ELEVENLABS_API_KEY en Render / server/.env para voz neural.
+                </p>
+              )}
+              {!caps.anthropic && (
+                <p className="text-xs text-amber-400/90 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
+                  ANTHROPIC_API_KEY ausente — JARVISIA está en modo básico sin razonamiento completo.
+                </p>
+              )}
 
-              <label className="flex items-center gap-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={useElevenLabs}
-                  onChange={(e) => setUseElevenLabs(e.target.checked)}
-                  className="rounded accent-jarvis-gold w-4 h-4"
-                />
-                Usar ElevenLabs (premium)
+              <label className="block text-sm text-muted">
+                Motor de voz
+                <select
+                  value={useElevenLabs}
+                  onChange={(e) => setUseElevenLabs(e.target.value)}
+                  className="input-field mt-1"
+                >
+                  <option value="auto">Auto (recomendado)</option>
+                  <option value="true">Solo ElevenLabs</option>
+                  <option value="false">Solo navegador</option>
+                </select>
               </label>
 
               <label className="block text-sm text-muted">

@@ -27,7 +27,7 @@ export default function CosmosNavbar() {
           <LCSLogo size={32} />
           <div>
             <span className="font-jarvis text-gold-gradient text-lg tracking-wider">JARVISIA</span>
-            <p className="text-[10px] text-white/40 -mt-0.5">Inteligencia que trabaja para ti</p>
+            <p className="text-[10px] text-white/40 -mt-0.5 uppercase tracking-wide">Inteligencia artificial que trabaja para ti</p>
           </div>
         </Link>
 

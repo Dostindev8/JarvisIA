@@ -45,36 +45,51 @@ export function useTextToSpeech() {
           return;
         }
 
-        const clean = String(text).replace(/\*\*/g, '').replace(/\[.*?\]\(.*?\)/g, '').slice(0, 4000);
+        const clean = String(text)
+          .replace(/\*\*/g, '')
+          .replace(/\[.*?\]\(.*?\)/g, '')
+          .replace(/#{1,6}\s/g, '')
+          .slice(0, 4000);
+
         window.speechSynthesis.cancel();
 
-        const utterance = new SpeechSynthesisUtterance(clean);
-        const { rate, pitch } = getSpeechSettings();
-        utterance.lang = 'es-DO';
-        utterance.rate = rate;
-        utterance.pitch = pitch;
+        // Chrome a veces necesita un tick para cargar voces
+        const run = () => {
+          const utterance = new SpeechSynthesisUtterance(clean);
+          const { rate, pitch } = getSpeechSettings();
+          utterance.lang = 'es-ES';
+          utterance.rate = Number.isFinite(rate) ? rate : 0.95;
+          utterance.pitch = Number.isFinite(pitch) ? pitch : 0.95;
+          utterance.volume = 1;
 
-        const voice = pickBestVoice();
-        if (voice) utterance.voice = voice;
+          const voice = pickBestVoice();
+          if (voice) {
+            utterance.voice = voice;
+            utterance.lang = voice.lang || 'es-ES';
+          }
 
-        utterance.onstart = () => {
-          setIsSpeaking(true);
-          simRef.current = setInterval(() => setAmplitude(35 + Math.random() * 70), 100);
+          utterance.onstart = () => {
+            setIsSpeaking(true);
+            simRef.current = setInterval(() => setAmplitude(35 + Math.random() * 70), 100);
+          };
+
+          utterance.onend = () => {
+            stopAnimation();
+            setIsSpeaking(false);
+            resolve();
+          };
+
+          utterance.onerror = () => {
+            stopAnimation();
+            setIsSpeaking(false);
+            resolve();
+          };
+
+          window.speechSynthesis.speak(utterance);
         };
 
-        utterance.onend = () => {
-          stopAnimation();
-          setIsSpeaking(false);
-          resolve();
-        };
-
-        utterance.onerror = () => {
-          stopAnimation();
-          setIsSpeaking(false);
-          resolve();
-        };
-
-        window.speechSynthesis.speak(utterance);
+        loadVoices();
+        setTimeout(run, 50);
       }),
     [stopAnimation]
   );
@@ -84,6 +99,7 @@ export function useTextToSpeech() {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       const ctx = new AudioCtx();
       audioContextRef.current = ctx;
+      if (ctx.state === 'suspended') await ctx.resume();
 
       const response = await fetch(blobUrl);
       const arrayBuffer = await response.arrayBuffer();
@@ -122,7 +138,8 @@ export function useTextToSpeech() {
 
       const { useElevenLabs } = getSpeechSettings();
       const isMediaUrl =
-        textOrUrl.startsWith('http') || textOrUrl.startsWith('/') || textOrUrl.startsWith('blob:');
+        typeof textOrUrl === 'string' &&
+        (textOrUrl.startsWith('http') || textOrUrl.startsWith('/') || textOrUrl.startsWith('blob:'));
 
       if (isMediaUrl) {
         try {
@@ -134,7 +151,9 @@ export function useTextToSpeech() {
         }
       }
 
-      if (useElevenLabs && typeof textOrUrl === 'string' && !isMediaUrl) {
+      // auto | true → intenta ElevenLabs en el servidor
+      const tryEleven = useElevenLabs === true || useElevenLabs === 'auto';
+      if (tryEleven && typeof textOrUrl === 'string' && !isMediaUrl) {
         try {
           const token = getToken();
           const res = await fetch(`${API_BASE}/api/ai/tts`, {
@@ -161,7 +180,11 @@ export function useTextToSpeech() {
   );
 
   const stop = useCallback(() => {
-    sourceRef.current?.stop();
+    try {
+      sourceRef.current?.stop();
+    } catch {
+      /* noop */
+    }
     window.speechSynthesis?.cancel();
     setIsSpeaking(false);
     stopAnimation();
