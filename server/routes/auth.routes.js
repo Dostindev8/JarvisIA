@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { requireAuth, blacklistToken, logAuthEvent } = require('../middleware/auth');
@@ -11,8 +12,19 @@ function signToken(user) {
   });
 }
 
+function assertDbReady(res) {
+  if (mongoose.connection.readyState === 1) return true;
+  res.status(503).json({
+    success: false,
+    message:
+      'Base de datos no conectada. Revisa MONGODB_URI en Render o activa SEED_DEMO_USER=true / ALLOW_INMEMORY_DB=true.'
+  });
+  return false;
+}
+
 router.post('/register', async (req, res) => {
   try {
+    if (!assertDbReady(res)) return;
     const { name, email, password } = req.body;
     if (!name || !email || !password) {
       return res.status(400).json({ success: false, message: 'Datos incompletos' });
@@ -37,6 +49,7 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   try {
+    if (!assertDbReady(res)) return;
     const { email, password } = req.body;
     const user = await User.findOne({ email }).select('+password');
 

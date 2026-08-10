@@ -37,6 +37,8 @@ services:
         sync: false
       - key: SEED_DEMO_USER
         value: "true"
+      - key: ALLOW_INMEMORY_DB
+        value: "true"
       - key: DEMO_USER_EMAIL
         sync: false
       - key: DEMO_USER_PASSWORD

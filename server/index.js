@@ -72,7 +72,16 @@ ensureAudioDir();
 app.use('/audio', express.static(path.join(__dirname, 'public', 'audio')));
 
 app.get('/api/health', (_req, res) => {
-  res.json({ success: true, service: 'jarvis-api', timestamp: new Date().toISOString() });
+  // Siempre 200 = proceso vivo (Render free reinicia si el health falla).
+  // El estado real de Mongo va en `db` para diagnóstico.
+  const { dbStatus } = require('./config/db');
+  const db = dbStatus();
+  res.json({
+    success: true,
+    service: 'jarvis-api',
+    timestamp: new Date().toISOString(),
+    db
+  });
 });
 
 app.use('/api/auth', require('./routes/auth.routes'));
@@ -97,8 +106,9 @@ async function start() {
   try {
     await connectDB();
     await seedLCSKnowledge();
-  } catch {
-    console.warn('[DB] Continuando sin MongoDB — algunas funciones estarán limitadas');
+  } catch (err) {
+    console.error('[DB] Fallo crítico de arranque:', err.message);
+    console.warn('[DB] Continuando sin MongoDB — login/API de datos fallarán hasta conectar Atlas');
   }
 
   initCobrosCron();
