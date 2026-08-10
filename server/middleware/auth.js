@@ -1,7 +1,10 @@
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const { getRedis } = require('../config/redis');
+
+const EMERGENCY_DEMO_ID = '000000000000000000000001';
 
 async function isTokenBlacklisted(token) {
   const redis = getRedis();
@@ -45,6 +48,24 @@ async function requireAuth(req, res, next) {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Sesión demo de emergencia cuando Mongo no está conectado
+    if (
+      mongoose.connection.readyState !== 1 &&
+      String(decoded.id) === EMERGENCY_DEMO_ID &&
+      process.env.ALLOW_EMERGENCY_DEMO_LOGIN !== 'false'
+    ) {
+      req.user = {
+        _id: EMERGENCY_DEMO_ID,
+        name: 'Dostin Santana',
+        email: (process.env.DEMO_USER_EMAIL || 'admin@jarvisia.do').toLowerCase(),
+        role: decoded.role || 'admin'
+      };
+      req.token = token;
+      req.tokenExp = decoded.exp;
+      return next();
+    }
+
     const user = await User.findById(decoded.id).select('-password');
 
     if (!user) {

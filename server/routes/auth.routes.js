@@ -17,9 +17,23 @@ function assertDbReady(res) {
   res.status(503).json({
     success: false,
     message:
-      'Base de datos no conectada. Revisa MONGODB_URI en Render o activa SEED_DEMO_USER=true / ALLOW_INMEMORY_DB=true.'
+      'Base de datos no conectada. En Render: Manual Deploy → Clear build cache & deploy. Si Atlas está muerto, el API usa Mongo en memoria automáticamente tras redeploy.'
   });
   return false;
+}
+
+/** Login de emergencia sin Mongo (demo) — solo si DB cae tras arranque. */
+function tryEmergencyDemoLogin(email, password) {
+  if (process.env.ALLOW_EMERGENCY_DEMO_LOGIN === 'false') return null;
+  const demoEmail = (process.env.DEMO_USER_EMAIL || 'admin@jarvisia.do').toLowerCase();
+  const demoPassword = process.env.DEMO_USER_PASSWORD || 'JarvisIA2026!';
+  if ((email || '').toLowerCase() !== demoEmail || password !== demoPassword) return null;
+  return {
+    _id: '000000000000000000000001',
+    name: 'Dostin Santana',
+    email: demoEmail,
+    role: 'admin'
+  };
 }
 
 router.post('/register', async (req, res) => {
@@ -49,8 +63,24 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   try {
-    if (!assertDbReady(res)) return;
     const { email, password } = req.body;
+
+    if (mongoose.connection.readyState !== 1) {
+      const demo = tryEmergencyDemoLogin(email, password);
+      if (!demo) {
+        return assertDbReady(res);
+      }
+      const token = signToken(demo);
+      return res.json({
+        success: true,
+        data: {
+          token,
+          user: { id: demo._id, name: demo.name, email: demo.email, role: demo.role },
+          mode: 'emergency_demo'
+        }
+      });
+    }
+
     const user = await User.findOne({ email }).select('+password');
 
     if (!user || !(await user.comparePassword(password))) {
