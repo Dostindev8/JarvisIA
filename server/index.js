@@ -1,0 +1,110 @@
+require('dotenv').config();
+require('./config/validateEnv')();
+
+const http = require('http');
+const path = require('path');
+const express = require('express');
+const morgan = require('morgan');
+const { Server } = require('socket.io');
+
+const connectDB = require('./config/db');
+const applySecurityMiddleware = require('./middleware/security.middleware');
+const requestLogger = require('./middleware/requestLogger');
+const errorHandler = require('./middleware/errorHandler');
+const { seedLCSKnowledge } = require('./scripts/seedLCSKnowledge');
+const initJarvisSocket = require('./sockets/jarvisSocket');
+const { setSocketBroadcast } = require('./tools/jarvisTools');
+const aiRoutes = require('./routes/ai.routes');
+const whatsappRoutes = require('./routes/whatsapp.routes');
+const whatsappWebhookRoutes = require('./routes/whatsappWebhook.routes');
+const { initCobrosCron } = require('./jobs/cobros.cron');
+const { initMemorySummaryCron } = require('./jobs/memorySummary.cron');
+const { ensureAudioDir } = require('./services/MusicService');
+
+const app = express();
+const server = http.createServer(app);
+
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  process.env.CLIENT_URL
+].filter(Boolean);
+
+const io = new Server(server, {
+  cors: { origin: allowedOrigins, credentials: true }
+});
+
+const { broadcastToUser, broadcastAll } = initJarvisSocket(io);
+setSocketBroadcast(broadcastToUser);
+
+aiRoutes.setJarvisEmitters({
+  response: (userId, data) => broadcastToUser(userId, 'jarvis:response', data),
+  state: (userId, data) => broadcastToUser(userId, 'jarvis:state', data)
+});
+
+whatsappRoutes.setWhatsAppEmitter(broadcastToUser);
+whatsappWebhookRoutes.setWebhookEmitter(broadcastAll);
+
+applySecurityMiddleware(app);
+app.use(morgan('dev'));
+app.use(express.json({
+  limit: '512kb',
+  verify: (req, _res, buf) => {
+    req.rawBody = buf;
+  }
+}));
+app.use(express.urlencoded({ extended: true, limit: '512kb' }));
+app.use(requestLogger);
+
+ensureAudioDir();
+app.use('/audio', express.static(path.join(__dirname, 'public', 'audio')));
+
+app.get('/api/health', (_req, res) => {
+  res.json({ success: true, service: 'jarvis-api', timestamp: new Date().toISOString() });
+});
+
+app.use('/api/auth', require('./routes/auth.routes'));
+app.use('/api/clients', require('./routes/clients.routes'));
+app.use('/api/payments', require('./routes/payments.routes'));
+app.use('/api/quotes', require('./routes/quotes.routes'));
+app.use('/api/projects', require('./routes/projects.routes'));
+app.use('/api/ai', aiRoutes);
+app.use('/api/whatsapp/webhook', whatsappWebhookRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/music', require('./routes/music.routes'));
+
+app.use((_req, res) => {
+  res.status(404).json({ success: false, message: 'Ruta no encontrada' });
+});
+
+app.use(errorHandler);
+
+const PORT = process.env.PORT || 5000;
+
+async function start() {
+  try {
+    await connectDB();
+    await seedLCSKnowledge();
+  } catch {
+    console.warn('[DB] Continuando sin MongoDB — algunas funciones estarán limitadas');
+  }
+
+  initCobrosCron();
+  initMemorySummaryCron();
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`[JARVIS] Puerto ${PORT} en uso. Cierra la instancia anterior o usa PORT distinto.`);
+      process.exit(1);
+    }
+    throw err;
+  });
+
+  server.listen(PORT, () => {
+    console.log(`[JARVIS] API + Socket.io en puerto ${PORT}`);
+  });
+}
+
+start();
+
+module.exports = { app, server, io };

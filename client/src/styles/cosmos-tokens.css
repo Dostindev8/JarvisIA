@@ -1,0 +1,40 @@
+:root {
+  --cosmos-navy: #1A1A2E;
+  --cosmos-red: #E94560;
+  --cosmos-gold: #C9A84C;
+  --cosmos-void: #0A0A15;
+  --cosmos-deep: #0D0D1F;
+  --cosmos-nebula: #16213E;
+  --cosmos-surface: #1E1E35;
+  --cosmos-elevated: #252540;
+  --cosmos-border: #2A2A50;
+  --cosmos-cyan: #00D4FF;
+  --cosmos-violet: #7B61FF;
+  --cosmos-emerald: #00FFB2;
+  --cosmos-amber: #FFB347;
+  --cosmos-plasma: #FF6B9D;
+  --grad-cosmos: linear-gradient(135deg, #0A0A15 0%, #1A1A2E 50%, #16213E 100%);
+  --grad-nebula: linear-gradient(135deg, #E94560 0%, #7B61FF 50%, #00D4FF 100%);
+  --grad-gold: linear-gradient(135deg, #C9A84C 0%, #FFD700 50%, #C9A84C 100%);
+  --grad-aurora: linear-gradient(135deg, #00D4FF 0%, #7B61FF 50%, #E94560 100%);
+  --glass-md: blur(16px) saturate(200%);
+  --glass-bg-md: rgba(26, 26, 46, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --font-display: 'Sora', 'Inter', sans-serif;
+  --font-body: 'Inter', 'DM Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-jarvis: 'Orbitron', 'Sora', sans-serif;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --z-particles: 15;
+  --z-content: 20;
+  --z-panel: 30;
+  --z-toast: 80;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

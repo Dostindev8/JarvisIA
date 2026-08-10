@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+.env.local
+server/.env
+client/.env
+*.log
+.DS_Store
+server/public/audio/*.mp3
+server/public/audio/*.ogg
+server/public/audio/*.wav
+server/public/audio/*.flac
+!.gitkeep
