@@ -7,6 +7,9 @@ const express = require('express');
 const morgan = require('morgan');
 const { Server } = require('socket.io');
 
+// Antes de connectDB: repara installs rotos de Render (monorepo / omit=dev)
+require('./scripts/ensureMemoryServer')();
+
 const connectDB = require('./config/db');
 const applySecurityMiddleware = require('./middleware/security.middleware');
 const requestLogger = require('./middleware/requestLogger');

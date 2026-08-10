@@ -12,7 +12,9 @@
     "build": "npm install --prefix client && npm run build --prefix client",
     "start": "node server/index.js",
     "build:client": "npm install --prefix client && npm run build --prefix client",
-    "build:server": "npm install --prefix server --omit=dev"
+    "build:server": "npm install --prefix server --omit=dev",
+    "build:render": "npm install --prefix server --no-audit --no-fund && node -e \"require('./server/node_modules/mongodb-memory-server'); console.log('mms-ok')\"",
+    "start:render": "node server/index.js"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
