@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 let memoryServer = null;
 let reconnectTimer = null;
 let usingMemory = false;
+let lastError = null;
 
 /**
  * Algunos ISPs/redes bloquean o fallan las consultas SRV (mongodb+srv://).
@@ -29,7 +30,8 @@ function dbStatus() {
     readyState: mongoose.connection.readyState,
     state: states[mongoose.connection.readyState] || 'unknown',
     usingMemory,
-    connected: mongoose.connection.readyState === 1
+    connected: mongoose.connection.readyState === 1,
+    lastError
   };
 }
 
@@ -61,20 +63,32 @@ async function connectWithRetry(uri, attempts = 3) {
  * (clúster pausado/eliminado). Datos no persistentes entre reinicios.
  */
 async function connectInMemory() {
-  const { MongoMemoryServer } = require('mongodb-memory-server');
-  if (memoryServer) {
-    try {
-      await memoryServer.stop();
-    } catch {
-      /* ignore */
+  try {
+    const { MongoMemoryServer } = require('mongodb-memory-server');
+    if (memoryServer) {
+      try {
+        await memoryServer.stop();
+      } catch {
+        /* ignore */
+      }
     }
+    memoryServer = await MongoMemoryServer.create({
+      instance: { storageEngine: 'wiredTiger' }
+    });
+    if (mongoose.connection.readyState !== 0) {
+      await mongoose.disconnect().catch(() => {});
+    }
+    await mongoose.connect(memoryServer.getUri('jarvis'));
+    usingMemory = true;
+    lastError = null;
+    console.log('[DB] MongoDB EN MEMORIA activo (fallback — datos no persistentes)');
+    await seedDemoUser();
+    return mongoose.connection;
+  } catch (err) {
+    lastError = `memory: ${err.message}`;
+    console.error('[DB] Fallback en memoria falló:', err.message);
+    throw err;
   }
-  memoryServer = await MongoMemoryServer.create();
-  await mongoose.connect(memoryServer.getUri('jarvis'));
-  usingMemory = true;
-  console.log('[DB] MongoDB EN MEMORIA activo (fallback — datos no persistentes)');
-  await seedDemoUser();
-  return mongoose.connection;
 }
 
 function allowInMemoryFallback() {
@@ -154,6 +168,7 @@ async function connectDB() {
     if (process.env.SEED_DEMO_USER === 'true') await seedDemoUser();
     return conn;
   } catch (err) {
+    lastError = `atlas: ${err.message}`;
     if (allowInMemoryFallback()) {
       console.warn(`[DB] Atlas inaccesible (${err.message}). Usando fallback en memoria.`);
       const conn = await connectInMemory();
@@ -167,3 +182,4 @@ async function connectDB() {
 module.exports = connectDB;
 module.exports.dbStatus = dbStatus;
 module.exports.seedDemoUser = seedDemoUser;
+module.exports.connectInMemoryOnly = connectInMemory;

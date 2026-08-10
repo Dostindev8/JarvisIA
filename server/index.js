@@ -80,6 +80,7 @@ app.get('/api/health', (_req, res) => {
     success: true,
     service: 'jarvis-api',
     timestamp: new Date().toISOString(),
+    commit: process.env.RENDER_GIT_COMMIT || process.env.VERCEL_GIT_COMMIT_SHA || null,
     db
   });
 });
@@ -108,7 +109,19 @@ async function start() {
     await seedLCSKnowledge();
   } catch (err) {
     console.error('[DB] Fallo crítico de arranque:', err.message);
-    console.warn('[DB] Continuando sin MongoDB — login/API de datos fallarán hasta conectar Atlas');
+    // Segundo intento: memoria pura (por si el primer fallback falló a medias)
+    try {
+      if (process.env.ALLOW_INMEMORY_DB !== 'false') {
+        const { connectInMemoryOnly } = require('./config/db');
+        if (typeof connectInMemoryOnly === 'function') {
+          await connectInMemoryOnly();
+          await seedLCSKnowledge();
+        }
+      }
+    } catch (err2) {
+      console.error('[DB] Sin DB usable:', err2.message);
+      console.warn('[DB] Continuando sin MongoDB — login fallará hasta Atlas o redeploy con cache limpio');
+    }
   }
 
   initCobrosCron();
