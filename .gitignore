@@ -11,3 +11,4 @@ server/public/audio/*.ogg
 server/public/audio/*.wav
 server/public/audio/*.flac
 !.gitkeep
+.vercel
