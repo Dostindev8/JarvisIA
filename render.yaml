@@ -1,30 +1,32 @@
-# Render Blueprint — backend JARVISIA
-# Deploy: en Render → New → Blueprint → conecta el repo Dostindev8/JarvisIA
+# Blueprint Render — backend JARVISIA (API + Socket.io)
+# Si el servicio ya existe: Settings → Root Directory = server
+# Build Command = npm install --omit=dev
+# Start Command = node index.js
 services:
   - type: web
     name: jarvisia
     runtime: node
     plan: free
     rootDir: server
-    buildCommand: npm ci --omit=dev
+    buildCommand: npm install --omit=dev
     startCommand: node index.js
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
-      # Secretos: configúralos en el dashboard de Render (sync:false = no en el repo)
       - key: MONGODB_URI
         sync: false
       - key: JWT_SECRET
         sync: false
       - key: CLIENT_URL
         sync: false
-      # Opcionales (IA/voz/WhatsApp) — dejar sin valor si no se usan
-      - key: ANTHROPIC_API_KEY
+      - key: OPENAI_API_KEY
         sync: false
       - key: ELEVENLABS_API_KEY
         sync: false
+      - key: ELEVENLABS_VOICE_ID
+        value: pNInz6obpgDQGcFmaJgB
       - key: WHATSAPP_API_TOKEN
         sync: false
       - key: WHATSAPP_PHONE_NUMBER_ID
@@ -33,7 +35,6 @@ services:
         sync: false
       - key: WHATSAPP_VERIFY_TOKEN
         sync: false
-      # Siembra un usuario admin si la base está vacía (útil en primer deploy)
       - key: SEED_DEMO_USER
         value: "true"
       - key: DEMO_USER_EMAIL
