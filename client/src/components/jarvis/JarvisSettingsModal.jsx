@@ -17,7 +17,7 @@ export default function JarvisSettingsModal({ isOpen, onClose, socketConnected, 
     return v === null || v === '' ? 'auto' : v;
   });
   const [voices, setVoices] = useState([]);
-  const [caps, setCaps] = useState({ anthropic: false, elevenLabs: false });
+  const [caps, setCaps] = useState({ provider: 'local', openai: false, elevenLabs: false });
   const [library, setLibrary] = useState([]);
   const { currentMemories, setMemories } = useJarvisStore();
   const [loading, setLoading] = useState(false);
@@ -99,14 +99,19 @@ export default function JarvisSettingsModal({ isOpen, onClose, socketConnected, 
               <p className="text-xs text-muted">
                 Modo <strong className="text-white/80">Auto</strong>: intenta ElevenLabs (voz premium) y si no hay key usa la mejor voz masculina española del navegador.
               </p>
+              <p className="text-xs text-muted rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                Cerebro activo: <span className="text-cyan-300 font-medium">{caps.provider || 'local'}</span>
+                {caps.provider === 'local' && ' (CRM, WhatsApp, web y música sin Claude)'}
+                {caps.provider === 'openai' && ' (GPT + tools)'}
+              </p>
               {!caps.elevenLabs && (
                 <p className="text-xs text-amber-400/90 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
-                  ElevenLabs no configurado en el servidor. Añade ELEVENLABS_API_KEY en Render / server/.env para voz neural.
+                  ElevenLabs opcional: añade ELEVENLABS_API_KEY para voz neural premium.
                 </p>
               )}
-              {!caps.anthropic && (
-                <p className="text-xs text-amber-400/90 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
-                  ANTHROPIC_API_KEY ausente — JARVISIA está en modo básico sin razonamiento completo.
+              {!caps.openai && (
+                <p className="text-xs text-zinc-400 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                  OPENAI_API_KEY opcional — sin ella usas el motor local DostinX8 (sin Claude).
                 </p>
               )}
 
@@ -215,7 +220,7 @@ export default function JarvisSettingsModal({ isOpen, onClose, socketConnected, 
               <div className="flex justify-between"><span className="text-muted">Versión</span><span>1.1.0</span></div>
               <div className="flex justify-between"><span className="text-muted">Socket</span><span className={socketConnected ? 'text-emerald-400' : 'text-zinc-400'}>{socketConnected ? 'Conectado' : 'Desconectado'}</span></div>
               <div className="flex justify-between"><span className="text-muted">Internet</span><span className="text-emerald-400">web_search activo</span></div>
-              <div className="flex justify-between"><span className="text-muted">Modo IA</span><span className={degradedMode ? 'text-amber-400' : 'text-emerald-400'}>{degradedMode ? 'Básico' : 'Completo'}</span></div>
+              <div className="flex justify-between"><span className="text-muted">Cerebro</span><span className="text-emerald-400">{caps.provider || (degradedMode ? 'local' : 'activo')}</span></div>
             </div>
           )}
         </div>

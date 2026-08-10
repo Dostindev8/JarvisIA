@@ -44,14 +44,19 @@ function createLimiter(max, windowMs = 60 * 1000) {
 const chatLimiter = createLimiter(30);
 const ttsLimiter = createLimiter(20);
 
-/** Capacidades activas — el front auto-habilita ElevenLabs / detecta modo básico */
+/** Capacidades activas — el cerebro ya no depende de Claude */
 router.get('/capabilities', requireAuth, (_req, res) => {
+  const { activeProvider } = require('../services/LLMService');
+  const provider = activeProvider();
   res.json({
     success: true,
     data: {
-      anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
+      provider,
+      openai: Boolean(process.env.OPENAI_API_KEY),
+      gemini: Boolean(process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY),
       elevenLabs: Boolean(process.env.ELEVENLABS_API_KEY),
       whisper: Boolean(process.env.OPENAI_API_KEY),
+      localAgent: true,
       defaultVoiceId: process.env.ELEVENLABS_VOICE_ID || 'pNInz6obpgDQGcFmaJgB'
     }
   });

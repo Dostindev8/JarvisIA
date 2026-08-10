@@ -3,7 +3,7 @@ const WhatsAppMessage = require('../models/WhatsAppMessage');
 const WhatsAppInbound = require('../models/WhatsAppInbound');
 const WhatsAppService = require('../services/WhatsAppService');
 const AuditLog = require('../models/AuditLog');
-const { buildJarvisSystemPrompt } = require('../prompts/jarvisSystemPrompt');
+const { completeText } = require('../services/LLMService');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -175,34 +175,20 @@ function serializeInbound(doc) {
   };
 }
 
-// Genera una respuesta profesional con JARVIS (sin herramientas, solo texto).
-// Degrada a plantilla editable si no hay API key.
+// Genera respuesta profesional (OpenAI si hay key; si no, plantilla editable).
 async function generateReplyText(inbound) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
   const from = inbound.profileName || 'el cliente';
-  if (!apiKey) {
-    return `Hola${inbound.profileName ? ` ${inbound.profileName}` : ''}, gracias por tu mensaje. `
-      + 'En breve te doy más detalles. — LCS';
-  }
-  const Anthropic = require('@anthropic-ai/sdk');
-  const client = new Anthropic({ apiKey });
-  const response = await client.messages.create({
-    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
-    max_tokens: 600,
-    system: buildJarvisSystemPrompt([]),
-    messages: [
-      {
-        role: 'user',
-        content:
-          `Redacta SOLO el texto de una respuesta profesional y cordial de WhatsApp para ${from}. `
-          + 'Responde en español dominicano neutro, tono cercano y profesional, sin emojis excesivos, '
-          + 'sin prefijos como "Respuesta:" ni comillas. Mensaje recibido del cliente:\n\n'
-          + `"${String(inbound.text || '').slice(0, 1500)}"`
-      }
-    ]
-  });
-  const text = response.content.find((b) => b.type === 'text')?.text?.trim();
-  return text || 'Gracias por tu mensaje, en breve te respondo con más detalle.';
+  const prompt =
+    `Redacta SOLO el texto de una respuesta profesional y cordial de WhatsApp para ${from}. `
+    + 'Español dominicano neutro, cercano y profesional, sin emojis excesivos, '
+    + 'sin prefijos ni comillas. Mensaje del cliente:\n\n'
+    + `"${String(inbound.text || '').slice(0, 1500)}"`;
+
+  const text = await completeText(prompt, { maxTokens: 600 });
+  if (text) return text;
+
+  return `Hola${inbound.profileName ? ` ${inbound.profileName}` : ''}, gracias por tu mensaje. `
+    + 'En breve te doy más detalles. — LCS / JARVISIA';
 }
 
 // Lista mensajes entrantes (por defecto los no atendidos)

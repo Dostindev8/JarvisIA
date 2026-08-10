@@ -1,12 +1,12 @@
 const cron = require('node-cron');
-const Anthropic = require('@anthropic-ai/sdk');
 const JarvisConversation = require('../models/JarvisConversation');
 const JarvisMemory = require('../models/JarvisMemory');
+const { completeText } = require('../services/LLMService');
 
 function initMemorySummaryCron() {
   if (process.env.DISABLE_CRON === 'true') return;
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn('[CRON memory] ANTHROPIC_API_KEY no configurada — job desactivado');
+  if (!process.env.OPENAI_API_KEY) {
+    console.warn('[CRON memory] OPENAI_API_KEY no configurada — job desactivado');
     return;
   }
 
@@ -26,7 +26,6 @@ function initMemorySummaryCron() {
         'messages.0': { $exists: true }
       });
 
-      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
       let summarized = 0;
 
       for (const conv of conversations) {
@@ -38,18 +37,10 @@ function initMemorySummaryCron() {
 
         if (!text.trim()) continue;
 
-        const response = await client.messages.create({
-          model: process.env.ANTHROPIC_HAIKU_MODEL || 'claude-3-5-haiku-20241022',
-          max_tokens: 256,
-          messages: [
-            {
-              role: 'user',
-              content: `Resume en 2-3 oraciones los patrones, preferencias o hechos importantes de esta conversación:\n\n${text}`
-            }
-          ]
-        });
-
-        const summary = response.content.find((b) => b.type === 'text')?.text || '';
+        const summary = await completeText(
+          `Resume en 2-3 oraciones los patrones, preferencias o hechos importantes de esta conversación:\n\n${text}`,
+          { maxTokens: 256 }
+        );
         if (!summary) continue;
 
         conv.summary = summary;
@@ -58,19 +49,18 @@ function initMemorySummaryCron() {
 
         await JarvisMemory.create({
           userId: conv.userId,
-          type: 'pattern',
+          type: 'preference',
           content: summary,
-          importance: 2,
-          context: 'memorySummary.cron',
-          lastUsedAt: new Date()
+          importance: 5,
+          source: 'cron_summary'
         });
 
         summarized += 1;
       }
 
-      console.log(`[CRON memory] ${summarized} conversaciones resumidas`);
+      console.log(`[CRON memory] Resumidas ${summarized} conversaciones`);
     } catch (err) {
-      console.error('[CRON memory] Error:', err.message);
+      console.error('[CRON memory]', err.message);
     }
   });
 }

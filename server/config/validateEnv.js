@@ -1,6 +1,6 @@
 const requiredProd = ['MONGODB_URI', 'JWT_SECRET'];
 const requiredDev = ['JWT_SECRET'];
-const warnOptional = ['ANTHROPIC_API_KEY', 'ELEVENLABS_API_KEY', 'REDIS_URL', 'UPSTASH_REDIS_REST_URL'];
+const warnOptional = ['OPENAI_API_KEY', 'ELEVENLABS_API_KEY', 'REDIS_URL', 'UPSTASH_REDIS_REST_URL'];
 
 module.exports = function validateEnv() {
   const isProd = process.env.NODE_ENV === 'production';

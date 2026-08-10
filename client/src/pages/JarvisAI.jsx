@@ -142,7 +142,7 @@ export default function JarvisAI() {
 
   useEffect(() => () => stopTts(), [stopTts]);
 
-  // Auto-configura voz: si el servidor tiene ElevenLabs, deja motor en auto + voice ID por defecto
+  // Capacidades: ya no dependemos de Claude. degraded solo si no hay ningún cerebro cloud.
   useEffect(() => {
     jarvisApi
       .capabilities()
@@ -156,9 +156,8 @@ export default function JarvisAI() {
             localStorage.setItem('jarvis_voice_id', data.defaultVoiceId);
           }
         }
-        if (!data.anthropic) {
-          useJarvisStore.getState().setDegradedMode?.(true);
-        }
+        // Motor local cuenta como operativo (no "modo básico" por falta de Claude)
+        useJarvisStore.getState().setDegradedMode?.(false);
       })
       .catch(() => {});
   }, []);

@@ -5,14 +5,11 @@ const SpeechRecognition =
     ? window.SpeechRecognition || window.webkitSpeechRecognition
     : null;
 
-/** Idiomas con mejor soporte en Chrome/Edge (es-DO suele fallar o no existir). */
 const STT_LANGS = ['es-ES', 'es-MX', 'es-US', 'es'];
 
 /**
- * Reconocimiento de voz robusto:
- * - continuous + reinicio suave hasta que el usuario detenga
- * - entrega el texto final solo una vez (sin doble envío)
- * - fallback de idioma si es-ES no está disponible
+ * STT one-shot estable (continuous=false evita el error "network" de Chrome
+ * al reiniciar sesiones largas). Al terminar, entrega el texto vía onFinal.
  */
 export function useSpeechRecognition({ onFinal } = {}) {
   const [isSupported] = useState(!!SpeechRecognition);
@@ -33,7 +30,8 @@ export function useSpeechRecognition({ onFinal } = {}) {
 
     const recognition = new SpeechRecognition();
     recognition.lang = STT_LANGS[0];
-    recognition.continuous = true;
+    // one-shot: más fiable que continuous+restart (evita error network)
+    recognition.continuous = false;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
@@ -53,12 +51,13 @@ export function useSpeechRecognition({ onFinal } = {}) {
 
     recognition.onerror = (event) => {
       const messages = {
-        'not-allowed': 'Permiso de micrófono denegado. Actívalo en el candado del navegador (HTTPS).',
-        'service-not-allowed': 'El navegador bloqueó el reconocimiento de voz. Usa Chrome/Edge.',
-        'no-speech': 'No detecté voz. Habla más cerca del micrófono.',
+        'not-allowed': 'Permiso de micrófono denegado. Actívalo en el candado del navegador.',
+        'service-not-allowed': 'Usa Chrome o Edge para el micrófono.',
+        'no-speech': 'No detecté voz. Pulsa el micrófono e intenta de nuevo.',
         'audio-capture': 'No hay micrófono disponible.',
-        network: 'Error de red al transcribir. Verifica tu conexión.',
-        'language-not-supported': 'Idioma no soportado — reintentando con español estándar.'
+        network:
+          'El reconocimiento en la nube del navegador falló. Escribe el mensaje o reintenta en Chrome con internet estable.',
+        'language-not-supported': 'Idioma no soportado — cambiando a español estándar.'
       };
 
       if (event.error === 'language-not-supported') {
@@ -70,26 +69,18 @@ export function useSpeechRecognition({ onFinal } = {}) {
       }
 
       if (event.error === 'aborted') return;
-      if (event.error === 'no-speech') {
-        setError(messages['no-speech']);
-        return;
-      }
-      setError(messages[event.error] || `Error de reconocimiento: ${event.error}`);
+
       listeningRef.current = false;
       setIsListening(false);
+      if (event.error !== 'no-speech') {
+        setError(messages[event.error] || `Error de reconocimiento: ${event.error}`);
+      } else {
+        setError(messages['no-speech']);
+      }
     };
 
     recognition.onend = () => {
-      // Si el usuario sigue en modo escuchar, reinicia (Chrome corta sesiones largas)
-      if (listeningRef.current) {
-        try {
-          recognition.start();
-          return;
-        } catch {
-          /* ya activo */
-        }
-      }
-
+      listeningRef.current = false;
       setIsListening(false);
       setInterimTranscript('');
 
@@ -115,7 +106,7 @@ export function useSpeechRecognition({ onFinal } = {}) {
 
   const startListening = useCallback(async () => {
     if (!SpeechRecognition || !recognitionRef.current) {
-      setError('Tu navegador no soporta reconocimiento de voz. Usa Chrome o Edge.');
+      setError('Tu navegador no soporta micrófono. Usa Chrome/Edge o escribe.');
       return;
     }
     setError(null);
@@ -138,11 +129,18 @@ export function useSpeechRecognition({ onFinal } = {}) {
     } catch {
       try {
         recognitionRef.current.abort();
-        recognitionRef.current.start();
+        setTimeout(() => {
+          try {
+            recognitionRef.current.start();
+          } catch {
+            listeningRef.current = false;
+            setIsListening(false);
+            setError('No se pudo iniciar el micrófono. Recarga e intenta de nuevo.');
+          }
+        }, 120);
       } catch {
         listeningRef.current = false;
         setIsListening(false);
-        setError('No se pudo iniciar el micrófono. Recarga e intenta de nuevo.');
       }
     }
   }, []);
