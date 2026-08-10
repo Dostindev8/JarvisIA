@@ -78,10 +78,9 @@ async function connectInMemory() {
 }
 
 function allowInMemoryFallback() {
-  if (process.env.ALLOW_INMEMORY_DB === 'false') return false;
-  if (process.env.NODE_ENV !== 'production') return true;
-  // Producción: opt-in explícito o SEED_DEMO_USER (modo demo)
-  return process.env.ALLOW_INMEMORY_DB === 'true' || process.env.SEED_DEMO_USER === 'true';
+  // Opt-out: ALLOW_INMEMORY_DB=false. Por defecto ON — si Atlas no resuelve
+  // DNS (clúster pausado/eliminado) la API sigue usable en demo.
+  return process.env.ALLOW_INMEMORY_DB !== 'false';
 }
 
 /**
