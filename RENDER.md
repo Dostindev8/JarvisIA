@@ -1,4 +1,24 @@
-# Deploy Render — JARVISIA API
+# Deploy — JARVISIA (Render + Vercel)
+
+## Vercel (frontend)
+
+Proyecto: [jarvis-ia](https://vercel.com/dostindevs-projects/jarvis-ia)
+
+| Campo | Valor recomendado |
+|---|---|
+| **Root Directory** | `client` *(o vacío si usas el `vercel.json` de la raíz)* |
+| **Framework** | Vite |
+| **Build Command** | `npm run build` |
+| **Output Directory** | `dist` |
+| **Install Command** | `npm install` |
+
+Env (opcional en Vercel — ya hay `client/.env.production`):
+```
+VITE_API_URL=
+VITE_SOCKET_URL=https://jarvisia.onrender.com
+```
+
+## Render (backend API)
 
 Servicio: `https://jarvisia.onrender.com` (`srv-d9sis4ugekts738q6hm0`)
 
