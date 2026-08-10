@@ -33,6 +33,14 @@ function applySecurityMiddleware(app) {
         if (isDev && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
           return callback(null, true);
         }
+        // Prod: permitir despliegues de Vercel y Render
+        try {
+          if (/\.(vercel\.app|onrender\.com)$/.test(new URL(origin).hostname)) {
+            return callback(null, true);
+          }
+        } catch {
+          /* origin malformado */
+        }
         callback(new Error(`CORS bloqueado: ${origin}`));
       },
       credentials: true,

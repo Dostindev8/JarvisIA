@@ -86,7 +86,10 @@ async function connectDB() {
   }
 
   try {
-    return await connectWithRetry(uri);
+    const conn = await connectWithRetry(uri);
+    // Seed opt-in en producción (primer deploy con base vacía)
+    if (process.env.SEED_DEMO_USER === 'true') await seedDemoUser();
+    return conn;
   } catch (err) {
     if (process.env.NODE_ENV !== 'production') {
       console.warn(`[DB] Atlas inaccesible (${err.message}). Usando fallback en memoria.`);

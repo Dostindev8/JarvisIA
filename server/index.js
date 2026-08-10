@@ -22,16 +22,28 @@ const { initMemorySummaryCron } = require('./jobs/memorySummary.cron');
 const { ensureAudioDir } = require('./services/MusicService');
 
 const app = express();
+// Detrás del proxy de Render/Vercel: necesario para IP real (rate-limit, logs)
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  process.env.CLIENT_URL
-].filter(Boolean);
+const staticOrigins = new Set(
+  ['http://localhost:5173', 'http://127.0.0.1:5173', process.env.CLIENT_URL].filter(Boolean)
+);
+
+/** Permite localhost, CLIENT_URL y despliegues *.vercel.app / *.onrender.com */
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  if (staticOrigins.has(origin)) return true;
+  return /\.(vercel\.app|onrender\.com)$/.test(new URL(origin).hostname);
+}
 
 const io = new Server(server, {
-  cors: { origin: allowedOrigins, credentials: true }
+  cors: {
+    origin(origin, cb) {
+      return isAllowedOrigin(origin) ? cb(null, true) : cb(new Error(`CORS: ${origin}`));
+    },
+    credentials: true
+  }
 });
 
 const { broadcastToUser, broadcastAll } = initJarvisSocket(io);
