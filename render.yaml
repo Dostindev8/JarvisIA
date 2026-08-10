@@ -8,7 +8,9 @@ services:
     runtime: node
     plan: free
     rootDir: server
-    buildCommand: npm install --omit=dev
+    # Instalar TODAS las deps (incl. mongodb-memory-server). --omit=dev + cache
+    # viejo dejaba el fallback sin el módulo y el login caía.
+    buildCommand: npm install --no-audit --no-fund && node -e "require('mongodb-memory-server'); console.log('mms-ok')"
     startCommand: node index.js
     healthCheckPath: /api/health
     autoDeploy: true

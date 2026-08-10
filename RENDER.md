@@ -39,7 +39,7 @@ Servicio: `https://jarvisia.onrender.com` (`srv-d9sis4ugekts738q6hm0`)
 | Campo | Valor |
 |---|---|
 | **Root Directory** | `server` |
-| **Build Command** | `npm install --omit=dev` |
+| **Build Command** | `npm install --no-audit --no-fund` |
 | **Start Command** | `node index.js` |
 | **Health Check Path** | `/api/health` |
 
