@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ListTodo, MessageSquare, Send, Settings2, Globe, Sparkles, WifiOff } from 'lucide-react';
+import { ListTodo, MessageSquare, Send, Settings2, Globe, Sparkles, WifiOff, Ear } from 'lucide-react';
 import JarvisOrb from '../components/jarvis/JarvisOrb';
 import JarvisWaveform from '../components/jarvis/JarvisWaveform';
 import JarvisSubtitles from '../components/jarvis/JarvisSubtitles';
@@ -22,7 +22,22 @@ import { useJarvisStore } from '../store/useJarvisStore';
 import { jarvisApi } from '../lib/api';
 import { runOfflineEngine, parseMenuOptions } from '../lib/offlineEngine';
 import { appendLocalHistory } from '../lib/localMemory';
+import { cleanSpeakText } from '../lib/speakText';
 import LCSLogo from '../components/branding/LCSLogo';
+
+const WELCOME =
+  'En línea, jefe. Soy JARVISIA. Puedo escucharte, hablarte y ayudarte con tareas, CRM, WhatsApp, internet y más. Pulsa el micrófono o escribe — estoy listo.';
+
+const WELCOME_MENU = `${WELCOME}
+
+──────────────────────────────────────────
+ ¿Qué deseas hacer ahora?
+  [1] Continuar conversación
+  [2] Ver mis tareas pendientes
+  [3] Crear una nueva tarea
+  [5] Ver estado de conexión
+  [6] Configuración
+──────────────────────────────────────────`;
 
 export default function JarvisAI() {
   const [input, setInput] = useState('');
@@ -30,7 +45,11 @@ export default function JarvisAI() {
   const [sending, setSending] = useState(false);
   const [menuOptions, setMenuOptions] = useState([]);
   const [tasksOpen, setTasksOpen] = useState(false);
+  const [handsFree, setHandsFree] = useState(
+    () => localStorage.getItem('jarvis_hands_free') === 'true'
+  );
   const spokeRef = useRef(false);
+  const greetedRef = useRef(false);
 
   const connectivity = useConnectivity();
 
@@ -62,22 +81,27 @@ export default function JarvisAI() {
     startListening,
     stopListening,
     resetTranscript
-  } = useSpeechRecognition({ onFinal: (text) => sendMessageRef.current?.(text) });
+  } = useSpeechRecognition({
+    handsFree,
+    onFinal: (text) => sendMessageRef.current?.(text)
+  });
 
   const { isSpeaking, amplitude: ttsAmplitude, speak, stop: stopTts } = useTextToSpeech();
 
   const handleSpeak = useCallback(
     async (text) => {
       if (!text || spokeRef.current) return;
-      // Hablar solo el cuerpo (sin menú largo)
-      const speakText = String(text).split('¿Qué deseas hacer ahora?')[0].trim().slice(0, 500);
+      const speakText = cleanSpeakText(text, 900);
       if (!speakText) return;
       spokeRef.current = true;
       setJarvisState('speaking');
       const voiceId = localStorage.getItem('jarvis_voice_id') || undefined;
-      await speak(speakText, voiceId);
-      setJarvisState('idle');
-      spokeRef.current = false;
+      try {
+        await speak(speakText, voiceId);
+      } finally {
+        setJarvisState('idle');
+        spokeRef.current = false;
+      }
     },
     [setJarvisState, speak]
   );
@@ -98,7 +122,13 @@ export default function JarvisAI() {
   const whatsappInbox = useWhatsAppInbound(socket);
 
   const effectiveAmplitude = isSpeaking ? ttsAmplitude : storeAmplitude;
-  const effectiveState = sending ? 'thinking' : isListening ? 'listening' : isSpeaking ? 'speaking' : jarvisState;
+  const effectiveState = sending
+    ? 'thinking'
+    : isListening
+      ? 'listening'
+      : isSpeaking
+        ? 'speaking'
+        : jarvisState;
   const offlineMode = !connectivity.online;
 
   useEffect(() => {
@@ -109,15 +139,19 @@ export default function JarvisAI() {
     setDegradedMode(offlineMode);
   }, [offlineMode, setDegradedMode]);
 
+  useEffect(() => {
+    localStorage.setItem('jarvis_hands_free', handsFree ? 'true' : 'false');
+  }, [handsFree]);
+
   const applyAssistantReply = useCallback(
     async (reply, { toolsUsed, provider, skipSpeak } = {}) => {
       setJarvisReply(reply);
       setMenuOptions(parseMenuOptions(reply));
       addMessage({ role: 'assistant', content: reply, toolsUsed, provider });
       appendLocalHistory({ role: 'assistant', content: reply });
-      if (!skipSpeak && !isConnected) await handleSpeak(reply);
+      if (!skipSpeak) await handleSpeak(reply);
     },
-    [addMessage, handleSpeak, isConnected]
+    [addMessage, handleSpeak]
   );
 
   const sendMessage = useCallback(
@@ -125,14 +159,16 @@ export default function JarvisAI() {
       const message = text?.trim();
       if (!message || sending) return;
 
-      // Atajos de menú locales
       if (message === '2' || message === '3') setTasksOpen(true);
       if (message === '6') toggleSettings();
+
+      if (isListening && !handsFree) stopListening();
 
       setSending(true);
       setJarvisState('thinking');
       setJarvisReply('');
       spokeRef.current = false;
+      stopTts();
       addMessage({ role: 'user', content: message });
       appendLocalHistory({ role: 'user', content: message });
       setInput('');
@@ -142,8 +178,10 @@ export default function JarvisAI() {
         if (!connectivity.online) {
           const offline = runOfflineEngine(message, { online: false });
           if (offline.action === 'settings') toggleSettings();
-          if (offline.action === 'list_tasks' || offline.action === 'create_task_prompt') setTasksOpen(true);
-          await applyAssistantReply(offline.text, { provider: 'offline', skipSpeak: false });
+          if (offline.action === 'list_tasks' || offline.action === 'create_task_prompt') {
+            setTasksOpen(true);
+          }
+          await applyAssistantReply(offline.text, { provider: 'offline' });
           return;
         }
 
@@ -154,7 +192,7 @@ export default function JarvisAI() {
       } catch (err) {
         const offline = runOfflineEngine(message, { online: false });
         await applyAssistantReply(
-          `⚠️ API no disponible (${err.message}).\n\n${offline.text}`,
+          `No pude contactar el servidor (${err.message}). Uso motor local.\n\n${offline.text}`,
           { provider: 'offline-fallback' }
         );
       } finally {
@@ -171,7 +209,11 @@ export default function JarvisAI() {
       setJarvisState,
       connectivity.online,
       applyAssistantReply,
-      toggleSettings
+      toggleSettings,
+      isListening,
+      handsFree,
+      stopListening,
+      stopTts
     ]
   );
 
@@ -189,6 +231,7 @@ export default function JarvisAI() {
       setJarvisState('idle');
     } else {
       stopTts();
+      spokeRef.current = false;
       resetTranscript();
       startListening();
       setJarvisState('listening');
@@ -212,6 +255,14 @@ export default function JarvisAI() {
         }
       })
       .catch(() => {});
+
+    if (!greetedRef.current && messages.length === 0) {
+      greetedRef.current = true;
+      setJarvisReply(WELCOME);
+      setMenuOptions(parseMenuOptions(WELCOME_MENU));
+      addMessage({ role: 'assistant', content: WELCOME, provider: 'welcome' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -231,7 +282,7 @@ export default function JarvisAI() {
                 JARVISIA
               </p>
               <p className="text-[10px] text-muted mt-0.5 tracking-wide uppercase truncate">
-                Inteligencia artificial que trabaja para ti
+                Escucha · entiende · habla · actúa
               </p>
             </div>
           </div>
@@ -249,8 +300,22 @@ export default function JarvisAI() {
               {offlineMode ? <WifiOff size={12} /> : <Globe size={12} />}
               {offlineMode ? 'Offline' : isConnected ? 'En línea' : 'Local'}
             </span>
+            <button
+              type="button"
+              onClick={() => setHandsFree((v) => !v)}
+              className={`chip hidden md:inline-flex ${
+                handsFree
+                  ? 'border-jarvis-cyan/40 text-jarvis-cyan bg-jarvis-cyan/10'
+                  : 'border-white/10 text-zinc-400'
+              }`}
+              title="Modo manos libres: escucha continua"
+              aria-pressed={handsFree}
+            >
+              <Ear size={12} />
+              {handsFree ? 'Manos libres' : 'Pulsar mic'}
+            </button>
             {degradedMode && !offlineMode && (
-              <span className="chip border-amber-500/30 text-amber-400 bg-amber-500/5 hidden md:inline-flex">
+              <span className="chip border-amber-500/30 text-amber-400 bg-amber-500/5 hidden lg:inline-flex">
                 <Sparkles size={12} />
                 Degradado
               </span>
@@ -274,25 +339,46 @@ export default function JarvisAI() {
           <div className="w-full max-w-sm">
             <JarvisWaveform amplitude={effectiveAmplitude} isActive={isListening || isSpeaking || sending} />
           </div>
-          <p className="text-xs text-muted text-center max-w-lg leading-relaxed">
-            Galaxia JARVIS — CRM, tareas, WhatsApp con confirmación, web en vivo y motor offline-first.
-          </p>
+          <div className="flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                spokeRef.current = false;
+                handleSpeak(jarvisReply || WELCOME);
+              }}
+              className="text-xs text-jarvis-cyan/80 hover:text-jarvis-gold underline-offset-2 hover:underline"
+            >
+              {isSpeaking ? 'Hablando…' : '▶ Escuchar respuesta de JARVIS'}
+            </button>
+            <p className="text-xs text-muted text-center max-w-lg leading-relaxed">
+              Micrófono → te escucho. Escribe o habla → te entiendo. Respondo y hablo. Listo para ayudarte.
+            </p>
+          </div>
         </section>
 
-        <JarvisChatPanel isOpen={isChatOpen} messages={messages} onClose={toggleChat} onOptionClick={handleMenuSelect} />
+        <JarvisChatPanel
+          isOpen={isChatOpen}
+          messages={messages}
+          onClose={toggleChat}
+          onOptionClick={handleMenuSelect}
+        />
       </main>
 
       <div className="max-w-2xl mx-auto w-full px-4 sm:px-6 pb-3 relative z-10">
         <JarvisSubtitles
           userText={transcript || input}
-          jarvisText={jarvisReply}
+          jarvisText={cleanSpeakText(jarvisReply, 280) || jarvisReply}
           isListening={isListening}
           isSpeaking={isSpeaking}
           interimTranscript={interimTranscript}
         />
         {sttError && <p className="text-jarvis-red text-xs mt-2">{sttError}</p>}
         {menuOptions.length > 0 && (
-          <JarvisActionMenu options={menuOptions.filter((o) => o.id !== '0')} onSelect={handleMenuSelect} disabled={sending} />
+          <JarvisActionMenu
+            options={menuOptions.filter((o) => o.id !== '0')}
+            onSelect={handleMenuSelect}
+            disabled={sending}
+          />
         )}
       </div>
 
@@ -306,22 +392,28 @@ export default function JarvisAI() {
         >
           <input
             type="text"
-            value={isListening ? (interimTranscript || transcript || input) : input}
+            value={isListening ? interimTranscript || transcript || input : input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={
-              offlineMode
-                ? 'Offline — tareas y comandos locales…'
-                : isListening
-                  ? 'Escuchando… habla ahora'
+              isListening
+                ? handsFree
+                  ? 'Manos libres — habla cuando quieras…'
+                  : 'Escuchando… habla ahora'
+                : offlineMode
+                  ? 'Offline — tareas y comandos locales…'
                   : !sttSupported
                     ? 'Escribe tu mensaje…'
                     : 'Escribe o pulsa el micrófono…'
             }
             className="flex-1 bg-transparent border-none outline-none text-sm px-3 min-h-[44px] placeholder:text-zinc-500"
-            disabled={sending || isListening}
+            disabled={sending || (isListening && !handsFree)}
             aria-label="Mensaje"
           />
-          <JarvisVoiceButton isListening={isListening} onToggle={handleVoiceToggle} disabled={!sttSupported || sending} />
+          <JarvisVoiceButton
+            isListening={isListening}
+            onToggle={handleVoiceToggle}
+            disabled={!sttSupported || sending}
+          />
           <button
             type="submit"
             disabled={sending || (!input.trim() && !transcript.trim())}

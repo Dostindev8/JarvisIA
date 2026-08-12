@@ -77,7 +77,7 @@ async function chatLocal({ messages, userId, conversationId }) {
   if (/^(hola|buenas|hey|hello|qué tal|que tal|jarvis)/i.test(lower) && lower.length < 40) {
     return {
       text:
-        'En línea, jefe. Soy JARVISIA — DostinX8 Supreme. Puedo gestionar CRM, cobros, cotizaciones, WhatsApp (con tu confirmación), buscar en internet y poner música. ¿En qué te ayudo?',
+        'Aquí estoy, jefe. Te escucho y estoy listo para ayudar: CRM, cobros, cotizaciones, WhatsApp (con tu confirmación), tareas, internet y música. ¿Qué hacemos?',
       toolsUsed,
       degraded: false,
       provider: 'local'

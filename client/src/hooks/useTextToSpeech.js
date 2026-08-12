@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getToken } from '../lib/api';
 import { getSpeechSettings, pickBestVoice, loadVoices } from '../lib/voices';
+import { cleanSpeakText } from '../lib/speakText';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -12,6 +13,7 @@ export function useTextToSpeech() {
   const rafRef = useRef(null);
   const sourceRef = useRef(null);
   const simRef = useRef(null);
+  const speakingLock = useRef(false);
 
   useEffect(() => {
     loadVoices();
@@ -41,25 +43,26 @@ export function useTextToSpeech() {
     (text) =>
       new Promise((resolve) => {
         if (!window.speechSynthesis) {
+          speakingLock.current = false;
           resolve();
           return;
         }
 
-        const clean = String(text)
-          .replace(/\*\*/g, '')
-          .replace(/\[.*?\]\(.*?\)/g, '')
-          .replace(/#{1,6}\s/g, '')
-          .slice(0, 4000);
+        const clean = cleanSpeakText(text, 3500);
+        if (!clean) {
+          speakingLock.current = false;
+          resolve();
+          return;
+        }
 
         window.speechSynthesis.cancel();
 
-        // Chrome a veces necesita un tick para cargar voces
         const run = () => {
           const utterance = new SpeechSynthesisUtterance(clean);
           const { rate, pitch } = getSpeechSettings();
           utterance.lang = 'es-ES';
           utterance.rate = Number.isFinite(rate) ? rate : 0.95;
-          utterance.pitch = Number.isFinite(pitch) ? pitch : 0.95;
+          utterance.pitch = Number.isFinite(pitch) ? pitch : 0.92;
           utterance.volume = 1;
 
           const voice = pickBestVoice();
@@ -68,28 +71,31 @@ export function useTextToSpeech() {
             utterance.lang = voice.lang || 'es-ES';
           }
 
+          let settled = false;
+          const finish = () => {
+            if (settled) return;
+            settled = true;
+            stopAnimation();
+            setIsSpeaking(false);
+            speakingLock.current = false;
+            resolve();
+          };
+
           utterance.onstart = () => {
             setIsSpeaking(true);
             simRef.current = setInterval(() => setAmplitude(35 + Math.random() * 70), 100);
           };
-
-          utterance.onend = () => {
-            stopAnimation();
-            setIsSpeaking(false);
-            resolve();
-          };
-
-          utterance.onerror = () => {
-            stopAnimation();
-            setIsSpeaking(false);
-            resolve();
-          };
+          utterance.onend = finish;
+          utterance.onerror = finish;
 
           window.speechSynthesis.speak(utterance);
+
+          const approxMs = Math.min(60000, Math.max(2500, clean.length * 55));
+          setTimeout(finish, approxMs + 2000);
         };
 
         loadVoices();
-        setTimeout(run, 50);
+        setTimeout(run, 40);
       }),
     [stopAnimation]
   );
@@ -121,6 +127,7 @@ export function useTextToSpeech() {
       return new Promise((resolve) => {
         source.onended = () => {
           setIsSpeaking(false);
+          speakingLock.current = false;
           stopAnimation();
           ctx.close().catch(() => {});
           if (blobUrl.startsWith('blob:')) URL.revokeObjectURL(blobUrl);
@@ -136,6 +143,14 @@ export function useTextToSpeech() {
     async (textOrUrl, voiceId) => {
       if (!textOrUrl) return;
 
+      try {
+        sourceRef.current?.stop();
+      } catch {
+        /* noop */
+      }
+      window.speechSynthesis?.cancel();
+      speakingLock.current = true;
+
       const { useElevenLabs } = getSpeechSettings();
       const isMediaUrl =
         typeof textOrUrl === 'string' &&
@@ -147,27 +162,33 @@ export function useTextToSpeech() {
           await speakWithBlob(url.startsWith('blob:') ? url : url);
           return;
         } catch {
-          /* fallback abajo */
+          /* fallback */
         }
       }
 
-      // auto | true → intenta ElevenLabs en el servidor
       const tryEleven = useElevenLabs === true || useElevenLabs === 'auto';
       if (tryEleven && typeof textOrUrl === 'string' && !isMediaUrl) {
         try {
           const token = getToken();
+          const payload = cleanSpeakText(textOrUrl, 4500);
+          if (!payload) {
+            speakingLock.current = false;
+            return;
+          }
           const res = await fetch(`${API_BASE}/api/ai/tts`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               ...(token && { Authorization: `Bearer ${token}` })
             },
-            body: JSON.stringify({ text: textOrUrl, voiceId })
+            body: JSON.stringify({ text: payload, voiceId })
           });
           if (res.ok) {
             const blob = await res.blob();
-            await speakWithBlob(URL.createObjectURL(blob));
-            return;
+            if (blob.size > 100) {
+              await speakWithBlob(URL.createObjectURL(blob));
+              return;
+            }
           }
         } catch {
           /* fallback navegador */
@@ -180,6 +201,7 @@ export function useTextToSpeech() {
   );
 
   const stop = useCallback(() => {
+    speakingLock.current = false;
     try {
       sourceRef.current?.stop();
     } catch {
