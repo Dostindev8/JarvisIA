@@ -402,7 +402,8 @@ async function chat({ messages, userId, conversationId }) {
   for (const name of chain) {
     try {
       const result = await runProvider(name, ctx);
-      return withMenu(result, { offline: name === 'local' });
+      // "offline" solo si no hay red real — el motor local online no es "modo offline"
+      return withMenu(result, { offline: !online && name === 'local' });
     } catch (err) {
       errors.push(`${name}: ${err.message}`);
       console.warn(`[LLMService] ${name} falló → siguiente:`, err.message);
@@ -417,7 +418,7 @@ async function chat({ messages, userId, conversationId }) {
       error: errors.join(' | ').slice(0, 200),
       provider: 'error'
     },
-    { offline: true }
+    { offline: !online }
   );
 }
 
