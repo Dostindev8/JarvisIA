@@ -12,3 +12,7 @@ server/public/audio/*.wav
 server/public/audio/*.flac
 !.gitkeep
 .vercel
+/data/
+/logs/
+server/data/
+client/data/

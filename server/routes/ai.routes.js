@@ -46,17 +46,24 @@ const ttsLimiter = createLimiter(20);
 
 /** Capacidades activas — el cerebro ya no depende de Claude */
 router.get('/capabilities', requireAuth, (_req, res) => {
-  const { activeProvider } = require('../services/LLMService');
+  const { activeProvider, providerChain } = require('../services/LLMService');
+  const { getConnectivityStatus } = require('../services/connectivity');
   const provider = activeProvider();
   res.json({
     success: true,
     data: {
       provider,
+      chain: providerChain(),
+      connectivity: getConnectivityStatus(),
+      claude: Boolean(process.env.ANTHROPIC_API_KEY),
       openai: Boolean(process.env.OPENAI_API_KEY),
       gemini: Boolean(process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY),
+      groq: Boolean(process.env.GROQ_API_KEY),
       elevenLabs: Boolean(process.env.ELEVENLABS_API_KEY),
       whisper: Boolean(process.env.OPENAI_API_KEY),
       localAgent: true,
+      tasks: true,
+      postResponseMenu: true,
       defaultVoiceId: process.env.ELEVENLABS_VOICE_ID || 'pNInz6obpgDQGcFmaJgB'
     }
   });
@@ -72,19 +79,23 @@ async function getOrCreateConversation(userId, conversationId) {
 
 router.post('/chat', requireAuth, chatLimiter, async (req, res) => {
   try {
-    const { message, conversationId, audioMode } = req.body;
+    const { chatBodySchema, parseOrThrow } = require('../validators/task.validators');
+    let body;
+    try {
+      body = parseOrThrow(chatBodySchema, req.body);
+    } catch (valErr) {
+      return res.status(400).json({ success: false, message: valErr.message });
+    }
+
     let cleanMessage;
     try {
-      cleanMessage = sanitizeUserMessage(message);
+      cleanMessage = sanitizeUserMessage(body.message);
     } catch (guardErr) {
       return res.status(400).json({ success: false, message: guardErr.message });
     }
-    if (!cleanMessage) {
-      return res.status(400).json({ success: false, message: 'Mensaje requerido' });
-    }
 
     const userId = req.user._id;
-    const conversation = await getOrCreateConversation(userId, conversationId);
+    const conversation = await getOrCreateConversation(userId, body.conversationId);
 
     conversation.messages.push({ role: 'user', content: cleanMessage });
     emitJarvisState?.(userId.toString(), { state: 'thinking' });
@@ -107,13 +118,13 @@ router.post('/chat', requireAuth, chatLimiter, async (req, res) => {
     });
     await conversation.save();
 
-    // TTS: el front llama POST /api/ai/tts (ElevenLabs) o speechSynthesis.
-    // No inventamos URLs GET /tts/stream inexistentes.
     emitJarvisState?.(userId.toString(), { state: 'speaking' });
     emitJarvisResponse?.(userId.toString(), {
       text: result.text,
-      speak: Boolean(audioMode),
-      toolsUsed: result.toolsUsed
+      speak: Boolean(body.audioMode),
+      toolsUsed: result.toolsUsed,
+      provider: result.provider,
+      menu: true
     });
 
     res.json({
@@ -121,9 +132,11 @@ router.post('/chat', requireAuth, chatLimiter, async (req, res) => {
       data: {
         reply: result.text,
         conversationId: conversation._id,
-        speak: Boolean(audioMode),
+        speak: Boolean(body.audioMode),
         toolsUsed: result.toolsUsed,
-        degraded: result.degraded || false
+        degraded: result.degraded || false,
+        provider: result.provider || null,
+        menu: true
       }
     });
   } catch (err) {

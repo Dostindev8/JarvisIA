@@ -29,6 +29,7 @@ export function useStarField(canvasRef, enabled = true) {
     const stars = Array.from({ length: count }, (_, i) => ({
       x: Math.random(),
       y: Math.random(),
+      z: Math.random() * 0.9 + 0.1,
       size: i < count * 0.67 ? Math.random() * 0.5 + 0.5 : Math.random() * 1 + 1,
       opacity: Math.random() * 0.5 + 0.3,
       twinkleSpeed: Math.random() * 0.02 + 0.005,
@@ -54,25 +55,38 @@ export function useStarField(canvasRef, enabled = true) {
         time += 1;
 
         stars.forEach((star) => {
+          // Profundidad 3D: estrellas cercanas se mueven más (efecto galaxia)
+          star.z -= 0.0012;
+          if (star.z <= 0.05) {
+            star.z = 1;
+            star.x = Math.random();
+            star.y = Math.random();
+          }
+          const depth = star.z;
+          const cx = canvas.width / 2;
+          const cy = canvas.height / 2;
+          const sx = (star.x - 0.5) * (1.2 / depth);
+          const sy = (star.y - 0.5) * (1.2 / depth);
+          const px = cx + sx * canvas.width * 0.45 + mouseX * star.parallaxDepth * canvas.width * (2 - depth);
+          const py = cy + sy * canvas.height * 0.45 + mouseY * star.parallaxDepth * canvas.height * (2 - depth);
+          const size = star.size * (1.4 / depth);
           const twinkle = Math.sin(time * star.twinkleSpeed + star.twinklePhase);
-          const currentOpacity = star.opacity * (0.7 + 0.3 * twinkle);
-          const px = star.x * canvas.width + mouseX * star.parallaxDepth * canvas.width;
-          const py = star.y * canvas.height + mouseY * star.parallaxDepth * canvas.height;
+          const currentOpacity = star.opacity * (0.55 + 0.45 * twinkle) * Math.min(1, 1.2 / depth);
 
-          if (star.size > 1.5) {
-            const gradient = ctx.createRadialGradient(px, py, 0, px, py, star.size * 4);
+          if (size > 1.6) {
+            const gradient = ctx.createRadialGradient(px, py, 0, px, py, size * 4);
             gradient.addColorStop(0, `${star.color}AA`);
             gradient.addColorStop(1, 'transparent');
             ctx.fillStyle = gradient;
             ctx.beginPath();
-            ctx.arc(px, py, star.size * 4, 0, Math.PI * 2);
+            ctx.arc(px, py, size * 4, 0, Math.PI * 2);
             ctx.fill();
           }
 
           ctx.globalAlpha = currentOpacity;
           ctx.fillStyle = star.color;
           ctx.beginPath();
-          ctx.arc(px, py, star.size, 0, Math.PI * 2);
+          ctx.arc(px, py, Math.max(0.4, size), 0, Math.PI * 2);
           ctx.fill();
         });
         ctx.globalAlpha = 1;

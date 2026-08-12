@@ -94,6 +94,7 @@ app.use('/api/payments', require('./routes/payments.routes'));
 app.use('/api/quotes', require('./routes/quotes.routes'));
 app.use('/api/projects', require('./routes/projects.routes'));
 app.use('/api/ai', aiRoutes);
+app.use('/api/tasks', require('./routes/tasks.routes'));
 app.use('/api/whatsapp/webhook', whatsappWebhookRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/music', require('./routes/music.routes'));

@@ -60,6 +60,18 @@ export const jarvisApi = {
   }
 };
 
+export const tasksApi = {
+  list: (scope = 'pending') =>
+    apiFetch(`/api/tasks?scope=${encodeURIComponent(scope)}`),
+  summary: () => apiFetch('/api/tasks/summary'),
+  create: (payload) =>
+    apiFetch('/api/tasks', { method: 'POST', body: JSON.stringify(payload) }),
+  update: (id, payload) =>
+    apiFetch(`/api/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  complete: (id) => apiFetch(`/api/tasks/${id}/complete`, { method: 'POST' }),
+  remove: (id) => apiFetch(`/api/tasks/${id}`, { method: 'DELETE' })
+};
+
 export const musicApi = {
   library: () => apiFetch('/api/music/library'),
   playlists: () => apiFetch('/api/music/playlists')

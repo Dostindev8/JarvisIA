@@ -9,6 +9,7 @@ const WhatsAppService = require('../services/WhatsAppService');
 const WhatsAppMessage = require('../models/WhatsAppMessage');
 const { searchAudio, listAudioFiles } = require('../services/MusicService');
 const { searchWeb, fetchWebPage } = require('../services/WebService');
+const Task = require('../models/Task');
 
 let socketBroadcast = null;
 
@@ -225,6 +226,68 @@ const JARVIS_TOOLS = [
       },
       required: ['topic']
     }
+  },
+  {
+    name: 'create_task',
+    description: 'Crea una tarea personal (título, prioridad, fecha opcional)',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        priority: { type: 'string', enum: ['baja', 'media', 'alta', 'urgente'] },
+        dueDate: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } }
+      },
+      required: ['title']
+    }
+  },
+  {
+    name: 'list_tasks',
+    description: 'Lista tareas. filter: all|pending|completed|today',
+    input_schema: {
+      type: 'object',
+      properties: {
+        filter: { type: 'string', enum: ['all', 'pending', 'completed', 'today'] }
+      }
+    }
+  },
+  {
+    name: 'complete_task',
+    description: 'Marca tarea completada por id',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id']
+    }
+  },
+  {
+    name: 'update_task',
+    description: 'Actualiza una tarea',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        title: { type: 'string' },
+        priority: { type: 'string' },
+        status: { type: 'string' },
+        dueDate: { type: 'string' }
+      },
+      required: ['id']
+    }
+  },
+  {
+    name: 'delete_task',
+    description: 'Elimina una tarea por id',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id']
+    }
+  },
+  {
+    name: 'tasks_summary',
+    description: 'Resumen de conteos de tareas del usuario',
+    input_schema: { type: 'object', properties: {} }
   }
 ];
 
@@ -557,6 +620,101 @@ async function executeJarvisTool(toolName, toolInput, context = {}) {
           sources: search.results.map((r) => ({ title: r.title, url: r.url })),
           preview: learned.slice(0, 300)
         };
+        break;
+      }
+
+      case 'create_task': {
+        if (!userId) {
+          result = { error: 'Usuario requerido' };
+          break;
+        }
+        const task = await Task.create({
+          userId,
+          title: String(toolInput.title || '').trim().slice(0, 300),
+          priority: toolInput.priority || 'media',
+          dueDate: toolInput.dueDate ? new Date(toolInput.dueDate) : undefined,
+          tags: Array.isArray(toolInput.tags) ? toolInput.tags.slice(0, 12) : []
+        });
+        result = {
+          id: task._id,
+          title: task.title,
+          priority: task.priority,
+          status: task.status
+        };
+        break;
+      }
+
+      case 'list_tasks': {
+        if (!userId) {
+          result = { tasks: [] };
+          break;
+        }
+        const q = { userId };
+        const f = toolInput.filter || 'pending';
+        if (f === 'pending') q.status = { $in: ['pendiente', 'en_progreso'] };
+        if (f === 'completed') q.status = 'completada';
+        if (f === 'today') {
+          const start = new Date();
+          start.setHours(0, 0, 0, 0);
+          const end = new Date();
+          end.setHours(23, 59, 59, 999);
+          q.dueDate = { $gte: start, $lte: end };
+        }
+        const tasks = await Task.find(q).sort({ priority: -1, createdAt: -1 }).limit(50).lean();
+        result = {
+          tasks: tasks.map((t) => ({
+            id: t._id,
+            title: t.title,
+            priority: t.priority,
+            status: t.status,
+            dueDate: t.dueDate
+          }))
+        };
+        break;
+      }
+
+      case 'complete_task': {
+        const task = await Task.findOneAndUpdate(
+          { _id: toolInput.id, userId },
+          { status: 'completada' },
+          { new: true }
+        );
+        result = task
+          ? { id: task._id, title: task.title, status: task.status }
+          : { error: 'Tarea no encontrada' };
+        break;
+      }
+
+      case 'update_task': {
+        const patch = {};
+        if (toolInput.title) patch.title = String(toolInput.title).slice(0, 300);
+        if (toolInput.priority) patch.priority = toolInput.priority;
+        if (toolInput.status) patch.status = toolInput.status;
+        if (toolInput.dueDate) patch.dueDate = new Date(toolInput.dueDate);
+        const task = await Task.findOneAndUpdate({ _id: toolInput.id, userId }, patch, { new: true });
+        result = task
+          ? { id: task._id, title: task.title, priority: task.priority, status: task.status }
+          : { error: 'Tarea no encontrada' };
+        break;
+      }
+
+      case 'delete_task': {
+        const deleted = await Task.findOneAndDelete({ _id: toolInput.id, userId });
+        result = deleted ? { deleted: true, id: toolInput.id } : { error: 'Tarea no encontrada' };
+        break;
+      }
+
+      case 'tasks_summary': {
+        if (!userId) {
+          result = { pendiente: 0, en_progreso: 0, completada: 0 };
+          break;
+        }
+        const [pendiente, en_progreso, completada] = await Promise.all([
+          Task.countDocuments({ userId, status: 'pendiente' }),
+          Task.countDocuments({ userId, status: 'en_progreso' }),
+          Task.countDocuments({ userId, status: 'completada' })
+        ]);
+        result = { pendiente, en_progreso, completada };
         break;
       }
 
