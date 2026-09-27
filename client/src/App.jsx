@@ -3,6 +3,7 @@ import { Suspense, lazy } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import CosmosLayout from './layouts/CosmosLayout';
 import CosmosLoadingScreen from './components/cosmos/CosmosLoadingScreen';
+import Portada from './components/Portal/Portada';
 
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -19,10 +20,11 @@ function AppRoutes() {
   return (
     <Suspense fallback={<CosmosLoadingScreen />}>
       <Routes>
+        <Route path="/" element={<Portada />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+        <Route path="/operations" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         <Route path="/jarvis" element={<PrivateRoute><JarvisAI /></PrivateRoute>} />
-        <Route path="*" element={<Navigate to="/jarvis" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
   );

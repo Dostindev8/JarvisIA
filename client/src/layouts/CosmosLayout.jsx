@@ -5,7 +5,7 @@ import CosmosNavbar from './CosmosNavbar';
 
 export default function CosmosLayout({ children }) {
   const { pathname } = useLocation();
-  const hideNav = pathname === '/login';
+  const hideNav = pathname === '/login' || pathname === '/';
 
   return (
     <div className="cosmos-root min-h-screen bg-jarvis-void font-body text-white">

@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import LCSLogo from '../components/branding/LCSLogo';
 
 const links = [
-  { to: '/', label: 'Dashboard' },
+  { to: '/operations', label: 'Operaciones' },
   { to: '/jarvis', label: 'JARVISIA' }
 ];
 

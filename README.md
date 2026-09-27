@@ -79,6 +79,32 @@ Jarvis entiende instrucciones naturales en español dominicano:
 
 ---
 
+## Portada holográfica (`/`)
+
+| Ruta | Acceso | Contenido |
+|---|---|---|
+| `/` | Pública | Portada con el agente holográfico JarvisIA |
+| `/login` | Pública | Acceso |
+| `/operations` | Privada | AI Operations Center (antes vivía en `/`) |
+| `/jarvis` | Privada | Chat de voz completo |
+
+- Lo que el agente puede decir vive solo en `client/src/lib/agent-script.json` (intro, FAQ y `fallback`). Fuera del guion responde el `fallback`; nunca inventa precios, clientes ni cifras.
+- Máquina de estados `idle → listening → thinking → speaking → idle` y `error` desde cualquier estado, con watchdogs: escucha 12 s, respuesta 8 s y voz según la duración estimada. Está en `client/src/lib/voiceAgentMachine.js`.
+- El micrófono solo se activa al pulsar "Hablar con Jarvis". Las contraseñas dichas en voz alta se rechazan. Hay entrada de texto como alternativa para navegadores sin reconocimiento de voz.
+- Mientras escucha, la onda usa la amplitud real del micrófono (`AnalyserNode`). Mientras habla, sigue los eventos de palabra de `speechSynthesis`, porque la voz nativa no expone su audio a Web Audio.
+- Respeta `prefers-reduced-motion` en vivo: sin partículas ni rotaciones, solo fundidos de opacidad.
+
+Flags de desarrollo (solo `npm run dev`): `?fps` muestra el contador de fotogramas, `?simulate=network` simula un fallo de red y `?simulate=timeout` una respuesta que nunca llega.
+
+```bash
+cd client
+npm run lint   # ESLint + reglas React Compiler en el código nuevo
+npm test       # máquina de estados + guion (node:test)
+npm run build
+```
+
+---
+
 ## Estructura del proyecto
 
 ```

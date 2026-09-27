@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "lang": "es-ES",
+  "intro": [
+    "Bienvenido a JarvisIA, el centro de operaciones de Logic Code Spot.",
+    "Gestiono clientes, cobros, cotizaciones y automatizo lo repetitivo para que el equipo se enfoque en construir."
+  ],
+  "faq": [
+    {
+      "id": "password",
+      "trigger": ["contraseña", "contrasena", "password", "clave de acceso", "mi clave"],
+      "response": "Por seguridad no proceso contraseñas por voz. Escríbela solo en la pantalla de acceso."
+    },
+    {
+      "id": "access",
+      "trigger": ["cómo entro", "cómo accedo", "cómo ingreso", "iniciar sesión", "login", "acceder", "entrar al sistema"],
+      "response": "Con tu cuenta autorizada, desde el botón Entrar al sistema."
+    },
+    {
+      "id": "capabilities",
+      "trigger": ["qué puedes hacer", "qué haces", "para qué sirves", "funciones", "en qué me ayudas", "qué sabes hacer"],
+      "response": "Dentro del sistema creo cotizaciones, doy seguimiento a cobros, gestiono clientes y proyectos, y preparo mensajes de WhatsApp. En esta portada solo respondo preguntas generales."
+    },
+    {
+      "id": "what",
+      "trigger": ["qué eres", "quién eres", "qué es jarvis", "qué es jarvisia", "qué es esto", "cómo te llamas"],
+      "response": "Soy JarvisIA, el asistente de inteligencia artificial de Logic Code Spot. Reúno la operación del equipo en un solo centro de control."
+    },
+    {
+      "id": "company",
+      "trigger": ["logic code spot", "quién te creó", "quién te hizo", "quién te construyó", "de dónde eres"],
+      "response": "Me construyó Logic Code Spot, en Santo Domingo, República Dominicana, para automatizar su operación diaria."
+    },
+    {
+      "id": "privacy",
+      "trigger": ["privacidad", "me estás grabando", "me escuchas siempre", "guardas lo que digo", "grabando"],
+      "response": "Solo escucho cuando pulsas Hablar con Jarvis, y en esta portada no guardo lo que dices."
+    },
+    {
+      "id": "contact",
+      "trigger": ["contacto", "teléfono", "número", "hablar con alguien", "hablar con una persona", "equipo"],
+      "response": "Puedes contactar al equipo de Logic Code Spot al +1 (849) 473-7963, en Santo Domingo.",
+      "speech": "Puedes contactar al equipo de Logic Code Spot al más uno, ocho cuatro nueve, cuatro siete tres, siete nueve seis tres, en Santo Domingo."
+    },
+    {
+      "id": "greeting",
+      "trigger": ["hola", "buenos días", "buenas tardes", "buenas noches", "saludos", "hey jarvis"],
+      "response": "Hola. Pregúntame qué soy, qué puedo hacer o cómo entrar al sistema."
+    }
+  ],
+  "fallback": "No tengo esa información todavía — puedo conectarte con el equipo de Logic Code Spot."
+}
