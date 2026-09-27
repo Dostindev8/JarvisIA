@@ -94,7 +94,7 @@ export function runOfflineEngine(rawInput, { online = false } = {}) {
     };
   }
 
-  const createMatch = text.match(/(?:crea|nueva|agrega|añade)\s+(?:una\s+)?tarea\s*[:\-]?\s*(.+)/i);
+  const createMatch = text.match(/(?:crea|nueva|agrega|añade)\s+(?:una\s+)?tarea\s*[:-]?\s*(.+)/i);
   if (createMatch?.[1]) {
     let priority = 'media';
     if (/urgente/.test(lower)) priority = 'urgente';

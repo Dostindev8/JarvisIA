@@ -31,6 +31,7 @@ export default function JarvisTasksPanel({ isOpen, onClose, online }) {
 
   useEffect(() => {
     if (isOpen) reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recargar solo al abrir o al cambiar la conectividad
   }, [isOpen, online]);
 
   const add = async (e) => {
